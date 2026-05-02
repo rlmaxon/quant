@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local secrets
+.env
+
+# Pipeline outputs (auto-created by config.py)
+cache/
+reports/
+
+# OS
+.DS_Store
