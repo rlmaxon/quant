@@ -48,7 +48,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import sys
 import warnings
@@ -59,39 +58,33 @@ import requests
 
 warnings.filterwarnings("ignore")
 
-# ---------------------------------------------------------------------------
-# .ENV FILE LOADER — load API keys and config from .env file
-# ---------------------------------------------------------------------------
-
-from pathlib import Path
-
-_env_file = Path(__file__).parent / ".env"
-if _env_file.exists():
-    for _line in _env_file.read_text().splitlines():
-        _line = _line.strip()
-        if _line and "=" in _line and not _line.startswith("#"):
-            _key, _val = _line.split("=", 1)
-            _key = _key.strip()
-            _val = _val.strip().strip('"').strip("'")
-            os.environ.setdefault(_key, _val)
-
 try:
-    import yfinance as yf
+    import yfinance as yf  # noqa: F401  (kept for back-compat; calls go through shared)
 except ImportError:
     print("ERROR: yfinance not installed. Run: pip install yfinance")
     sys.exit(1)
 
+from config import DEFAULT_LLM_MODELS
+from shared import (
+    create_pipeline_state,
+    fmt_large_number,
+    fmt_pct,
+    fmt_price,
+    get_yfinance_ticker,
+    log_agent,
+    safe_get,
+)
+
 
 # ---------------------------------------------------------------------------
-# SHARED STATE
+# RESEARCHER STATE
 # ---------------------------------------------------------------------------
 
 def create_state(ticker: str, peers: list[str] | None = None) -> dict:
     """Initialize the shared state dict that flows through all agents."""
-    return {
-        "ticker": ticker.upper(),
-        "peers": [p.upper() for p in (peers or [])],
-        "timestamp": datetime.now().isoformat(),
+    state = create_pipeline_state(ticker=ticker)
+    state["peers"] = [p.upper() for p in (peers or [])]
+    state.update({
         "profile": {},
         "price": {},
         "fundamentals": {},
@@ -101,59 +94,8 @@ def create_state(ticker: str, peers: list[str] | None = None) -> dict:
         "sec_filings": {},
         "synthesis": {},
         "eodhd_sentiment": {},
-        "agent_log": [],
-        "errors": [],
-    }
-
-
-def log_agent(state: dict, agent: str, status: str, detail: str = ""):
-    """Log agent execution to state."""
-    state["agent_log"].append({
-        "agent": agent,
-        "status": status,
-        "detail": detail,
-        "time": datetime.now().isoformat(),
     })
-
-
-# ---------------------------------------------------------------------------
-# HELPER FUNCTIONS
-# ---------------------------------------------------------------------------
-
-def safe_get(info: dict, key: str, default=None):
-    """Safely get a value from yfinance info dict."""
-    val = info.get(key, default)
-    if val is None or (isinstance(val, float) and math.isnan(val)):
-        return default
-    return val
-
-
-def fmt_large_number(n) -> str:
-    """Format large numbers: 1.5T, 230B, 45M."""
-    if n is None:
-        return "N/A"
-    if isinstance(n, str):
-        return n
-    if n >= 1e12:
-        return f"${n/1e12:.2f}T"
-    if n >= 1e9:
-        return f"${n/1e9:.2f}B"
-    if n >= 1e6:
-        return f"${n/1e6:.1f}M"
-    return f"${n:,.0f}"
-
-
-def fmt_pct(val) -> str:
-    """Format as percentage."""
-    if val is None:
-        return "N/A"
-    return f"{val:.2%}" if isinstance(val, float) else str(val)
-
-
-def fmt_price(val) -> str:
-    if val is None:
-        return "N/A"
-    return f"${val:.2f}"
+    return state
 
 
 def compute_sma(closes: list[float], period: int) -> list[float | None]:
@@ -244,7 +186,7 @@ def agent_company_profile(state: dict) -> dict:
     print(f"  [1/11] Company profile...", end=" ", flush=True)
 
     try:
-        stock = yf.Ticker(ticker)
+        stock = get_yfinance_ticker(ticker)
         info = stock.info
 
         if not info or info.get("regularMarketPrice") is None:
@@ -307,7 +249,7 @@ def agent_price_volume(state: dict) -> dict:
 
     try:
         info = state.get("_yf_info", {})
-        stock = state.get("_yf_stock") or yf.Ticker(ticker)
+        stock = state.get("_yf_stock") or get_yfinance_ticker(ticker)
 
         # Get historical data for analysis
         hist = stock.history(period="1y")
@@ -395,7 +337,7 @@ def agent_fundamentals(state: dict) -> dict:
 
     try:
         info = state.get("_yf_info", {})
-        stock = state.get("_yf_stock") or yf.Ticker(ticker)
+        stock = state.get("_yf_stock") or get_yfinance_ticker(ticker)
 
         # Valuation
         valuation = {
@@ -718,7 +660,7 @@ def agent_peer_comparison(state: dict) -> dict:
 
         for t in all_tickers:
             try:
-                stock = yf.Ticker(t)
+                stock = get_yfinance_ticker(t)
                 info = stock.info
                 hist = stock.history(period="1y")
 
@@ -1668,10 +1610,7 @@ def _call_anthropic(context: str, api_key: str, model: str) -> str:
     return data["content"][0]["text"]
 
 
-DEFAULT_MODELS = {
-    "openai": "gpt-4o",
-    "anthropic": "claude-sonnet-4-20250514",
-}
+DEFAULT_MODELS = DEFAULT_LLM_MODELS
 
 
 def agent_llm_synthesis(state: dict, llm_provider: str | None = None,

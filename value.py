@@ -27,31 +27,23 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import math
 import os
 import sys
 import time
 import warnings
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 warnings.filterwarnings("ignore")
 
-# Load .env if present
-_env_file = Path(__file__).parent / ".env"
-if _env_file.exists():
-    for _line in _env_file.read_text().splitlines():
-        _line = _line.strip()
-        if _line and "=" in _line and not _line.startswith("#"):
-            _key, _val = _line.split("=", 1)
-            os.environ.setdefault(_key.strip(), _val.strip().strip('"').strip("'"))
-
 try:
-    import yfinance as yf
+    import yfinance as yf  # noqa: F401  (kept for back-compat; calls go through shared)
 except ImportError:
     print("ERROR: yfinance not installed. Run: pip install yfinance")
     sys.exit(1)
+
+from config import RISK_FREE_RATE, YFINANCE_RATE_LIMIT_EVERY, YFINANCE_SLEEP_SECONDS
+from shared import get_yfinance_ticker, safe_get  # also auto-loads .env
 
 
 # ---------------------------------------------------------------------------
@@ -129,58 +121,52 @@ def load_custom_universe(filepath: str) -> list[str]:
 def fetch_stock_data(ticker: str) -> dict | None:
     """Fetch fundamental data for a single ticker via yfinance."""
     try:
-        stock = yf.Ticker(ticker)
+        stock = get_yfinance_ticker(ticker)
         info = stock.info
 
         if not info or not info.get("marketCap"):
             return None
 
-        def safe(key, default=None):
-            val = info.get(key, default)
-            if val is None or (isinstance(val, float) and math.isnan(val)):
-                return default
-            return val
-
         return {
             "ticker": ticker,
-            "name": safe("longName", ticker),
-            "sector": safe("sector", "N/A"),
-            "industry": safe("industry", "N/A"),
-            "market_cap": safe("marketCap"),
-            "price": safe("currentPrice") or safe("regularMarketPrice"),
+            "name": safe_get(info, "longName", ticker),
+            "sector": safe_get(info, "sector", "N/A"),
+            "industry": safe_get(info, "industry", "N/A"),
+            "market_cap": safe_get(info, "marketCap"),
+            "price": safe_get(info, "currentPrice") or safe_get(info, "regularMarketPrice"),
             # Valuation
-            "pe_trailing": safe("trailingPE"),
-            "pe_forward": safe("forwardPE"),
-            "pb_ratio": safe("priceToBook"),
-            "ps_ratio": safe("priceToSalesTrailing12Months"),
-            "peg_ratio": safe("pegRatio"),
-            "ev_ebitda": safe("enterpriseToEbitda"),
+            "pe_trailing": safe_get(info, "trailingPE"),
+            "pe_forward": safe_get(info, "forwardPE"),
+            "pb_ratio": safe_get(info, "priceToBook"),
+            "ps_ratio": safe_get(info, "priceToSalesTrailing12Months"),
+            "peg_ratio": safe_get(info, "pegRatio"),
+            "ev_ebitda": safe_get(info, "enterpriseToEbitda"),
             # Per share
-            "eps_trailing": safe("trailingEps"),
-            "eps_forward": safe("forwardEps"),
-            "book_value": safe("bookValue"),
+            "eps_trailing": safe_get(info, "trailingEps"),
+            "eps_forward": safe_get(info, "forwardEps"),
+            "book_value": safe_get(info, "bookValue"),
             # Profitability
-            "profit_margin": safe("profitMargins"),
-            "operating_margin": safe("operatingMargins"),
-            "gross_margin": safe("grossMargins"),
-            "roe": safe("returnOnEquity"),
-            "roa": safe("returnOnAssets"),
+            "profit_margin": safe_get(info, "profitMargins"),
+            "operating_margin": safe_get(info, "operatingMargins"),
+            "gross_margin": safe_get(info, "grossMargins"),
+            "roe": safe_get(info, "returnOnEquity"),
+            "roa": safe_get(info, "returnOnAssets"),
             # Growth
-            "revenue_growth": safe("revenueGrowth"),
-            "earnings_growth": safe("earningsGrowth"),
+            "revenue_growth": safe_get(info, "revenueGrowth"),
+            "earnings_growth": safe_get(info, "earningsGrowth"),
             # Balance sheet
-            "debt_to_equity": safe("debtToEquity"),
-            "current_ratio": safe("currentRatio"),
-            "total_cash": safe("totalCash"),
-            "total_debt": safe("totalDebt"),
+            "debt_to_equity": safe_get(info, "debtToEquity"),
+            "current_ratio": safe_get(info, "currentRatio"),
+            "total_cash": safe_get(info, "totalCash"),
+            "total_debt": safe_get(info, "totalDebt"),
             # Income
-            "dividend_yield": safe("dividendYield"),
-            "payout_ratio": safe("payoutRatio"),
-            "free_cash_flow": safe("freeCashflow"),
+            "dividend_yield": safe_get(info, "dividendYield"),
+            "payout_ratio": safe_get(info, "payoutRatio"),
+            "free_cash_flow": safe_get(info, "freeCashflow"),
             # Risk
-            "beta": safe("beta"),
-            "52_week_high": safe("fiftyTwoWeekHigh"),
-            "52_week_low": safe("fiftyTwoWeekLow"),
+            "beta": safe_get(info, "beta"),
+            "52_week_high": safe_get(info, "fiftyTwoWeekHigh"),
+            "52_week_low": safe_get(info, "fiftyTwoWeekLow"),
         }
 
     except Exception:
@@ -248,8 +234,7 @@ def score_valuation(data: dict) -> tuple[float, list[str]]:
     # Earnings yield vs risk-free rate (0-5 points)
     if pe and pe > 0:
         earnings_yield = 1 / pe
-        risk_free = 0.045  # ~4.5% 10Y Treasury
-        spread = earnings_yield - risk_free
+        spread = earnings_yield - RISK_FREE_RATE
         if spread > 0.04:
             score += 5; reasons.append(f"Earnings yield {earnings_yield:.1%} (+{spread:.1%} vs T-bill)")
         elif spread > 0.02:
