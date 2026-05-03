@@ -1,0 +1,30 @@
+# Graham/Buffett value strategy — default
+#
+# Buys the top-scoring names from the composite screener, rebalances
+# annually, and holds up to 15 positions with equal weighting.
+# Designed for the v1 price-only backtest (survivorship-biased).
+
+name: graham_value
+description: >
+  Classic Graham/Buffett screen. Targets stocks with composite score >= 60,
+  reasonable valuation (P/E <= 20, P/B <= 3), and solid balance sheets.
+  Equal-weight, annual rebalance, 10-year backtest window.
+
+screen:
+  min_score: 60
+  max_pe: 20.0
+  max_pb: 3.0
+  min_roe: 0.10
+  max_debt_to_equity: 150.0
+  min_market_cap: 1.0e9
+
+portfolio:
+  max_positions: 15
+  position_size: equal
+  max_position_pct: 0.10
+
+backtest:
+  years: 10
+  rebalance: annual
+  commission: 0.001
+  cash_pct: 0.02

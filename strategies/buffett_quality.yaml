@@ -1,0 +1,30 @@
+# Buffett quality strategy — concentrated, higher bar
+#
+# A tighter screen focused on wide-moat businesses: high ROE, strong margins,
+# low debt, consistent earnings. Fewer positions, semi-annual rebalance.
+# Accepts a higher P/E in exchange for quality.
+
+name: buffett_quality
+description: >
+  Quality-first Buffett screen. Requires high ROE (>= 15%), low leverage
+  (D/E <= 80%), and a solid composite score (>= 65). Concentrated portfolio
+  of 10 names, semi-annual rebalance, 5-year backtest window.
+
+screen:
+  min_score: 65
+  max_pe: 30.0
+  max_pb: 5.0
+  min_roe: 0.15
+  max_debt_to_equity: 80.0
+  min_market_cap: 5.0e9
+
+portfolio:
+  max_positions: 10
+  position_size: equal
+  max_position_pct: 0.15
+
+backtest:
+  years: 5
+  rebalance: semiannual
+  commission: 0.001
+  cash_pct: 0.02
