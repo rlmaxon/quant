@@ -30,7 +30,7 @@ from shared import create_pipeline_state, log_agent
 # ---------------------------------------------------------------------------
 
 def _step_load_strategy(state: dict, strategy_name: str, years_override: int | None) -> dict:
-    print(f"  [1/5] Loading strategy: {strategy_name}")
+    print(f"  [1/6] Loading strategy: {strategy_name}")
     from strategy import load_strategy_into_state
     state = load_strategy_into_state(state, strategy_name)
     if not state.get("strategy"):
@@ -58,14 +58,14 @@ def _step_screen(
 ) -> dict:
     if tickers_override:
         state["tickers"] = [t.upper() for t in tickers_override]
-        print(f"  [2/5] Using provided tickers ({len(state['tickers'])}): "
+        print(f"  [2/6] Using provided tickers ({len(state['tickers'])}): "
               f"{', '.join(state['tickers'])}")
         # Populate a minimal screen section so decide.py has ticker context
         state["screen"] = {"top_picks": [{"ticker": t} for t in state["tickers"]]}
         log_agent(state, "screen", "skip", f"explicit tickers: {state['tickers']}")
         return state
 
-    print(f"  [2/5] Screening universe…", end=" ", flush=True)
+    print(f"  [2/6] Screening universe…", end=" ", flush=True)
     from value import get_sp500_tickers, load_custom_universe, scan_universe
 
     if universe_file:
@@ -123,7 +123,7 @@ def _step_screen(
 def _step_price_data(state: dict, refresh: bool) -> dict:
     years = state.get("strategy", {}).get("backtest", {}).get("years", 10)
     n = len(state.get("tickers", []))
-    print(f"  [3/5] Fetching price data ({n} tickers, {years}yr window)…", end=" ", flush=True)
+    print(f"  [3/6] Fetching price data ({n} tickers, {years}yr window)…", end=" ", flush=True)
     t0 = time.time()
     from data import load_price_data
     state = load_price_data(state, years=years + 1, refresh=refresh)
@@ -137,7 +137,7 @@ def _step_backtest(state: dict) -> dict:
     strategy_cfg = state.get("strategy", {})
     bt = strategy_cfg.get("backtest", {})
     print(
-        f"  [4/5] Running backtest "
+        f"  [4/6] Running backtest "
         f"({bt.get('years')}yr {bt.get('rebalance')})…",
         end=" ", flush=True,
     )
@@ -160,11 +160,11 @@ def _step_backtest(state: dict) -> dict:
 
 def _step_decision(state: dict, skip: bool) -> dict:
     if skip:
-        print("  [5/5] Recommendation: skipped (--no-llm)")
+        print("  [5/6] Recommendation: skipped (--no-llm)")
         log_agent(state, "make_decision", "skip", "--no-llm flag")
         return state
 
-    print("  [5/5] Generating recommendation…", end=" ", flush=True)
+    print("  [5/6] Generating recommendation…", end=" ", flush=True)
     from decide import make_decision
     state = make_decision(state)
     d = state.get("decision", {})
@@ -177,11 +177,19 @@ def _step_decision(state: dict, skip: bool) -> dict:
     return state
 
 
+def _step_report(state: dict, output_dir: Path, strategy_name: str) -> Path:
+    print(f"  [6/6] Writing report…", end=" ", flush=True)
+    from report import save_report
+    path = save_report(state, output_dir, strategy_name)
+    print(path.name)
+    return path
+
+
 # ---------------------------------------------------------------------------
 # Summary printer
 # ---------------------------------------------------------------------------
 
-def _print_summary(state: dict, output_path: Path | None) -> None:
+def _print_summary(state: dict, output_path: Path | None, report_path: Path | None = None) -> None:
     W = 54
     bar = "═" * W
     print(f"\n  {bar}")
@@ -254,7 +262,9 @@ def _print_summary(state: dict, output_path: Path | None) -> None:
             print(f"    ⚠  {e[:W]}")
 
     if output_path:
-        print(f"\n  Saved : {output_path}")
+        print(f"\n  JSON  : {output_path}")
+    if report_path:
+        print(f"  Report: {report_path}")
     print(f"  {bar}\n")
 
 
@@ -360,9 +370,12 @@ def main() -> None:
     # --- 5. Decision ---
     state = _step_decision(state, skip=args.no_llm)
 
-    # --- Save + summarise ---
+    # --- 6. Report ---
+    report_path = _step_report(state, output_dir, strategy_name)
+
+    # --- Save JSON + summarise ---
     output_path = _save_state(state, output_dir, strategy_name)
-    _print_summary(state, output_path)
+    _print_summary(state, output_path, report_path)
 
 
 if __name__ == "__main__":
