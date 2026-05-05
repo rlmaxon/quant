@@ -2190,7 +2190,7 @@ def main():
     llm_group.add_argument("--llm-key",
                            help="API key (or set OPENAI_API_KEY / ANTHROPIC_API_KEY env var)")
     llm_group.add_argument("--llm-model",
-                           help="Model override (default: gpt-4o / claude-sonnet-4-20250514)")
+                           help="Model override (default: gpt-4o / claude-sonnet-4-6)")
 
     # Finnhub options
     fh_group = parser.add_argument_group("Finnhub sentiment (optional)")

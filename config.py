@@ -30,7 +30,7 @@ for _d in (REPORTS_DIR, CACHE_DIR, STRATEGIES_DIR):
 DEFAULT_LLM_PROVIDER: str = "anthropic"
 DEFAULT_LLM_MODELS: dict[str, str] = {
     "openai": "gpt-4o",
-    "anthropic": "claude-sonnet-4-20250514",
+    "anthropic": "claude-sonnet-4-6",
 }
 
 
