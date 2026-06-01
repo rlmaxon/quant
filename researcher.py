@@ -56,6 +56,14 @@ from typing import Any
 
 import requests
 
+try:
+    from langsmith import traceable
+except ImportError:
+    def traceable(name=None, **kwargs):
+        def decorator(fn):
+            return fn
+        return decorator
+
 warnings.filterwarnings("ignore")
 
 try:
@@ -180,6 +188,7 @@ def compute_bollinger(closes: list[float], period: int = 20) -> dict:
 # AGENT 1: COMPANY PROFILE
 # ---------------------------------------------------------------------------
 
+@traceable(name="agent-company-profile")
 def agent_company_profile(state: dict) -> dict:
     """Fetch company identity, sector, description."""
     ticker = state["ticker"]
@@ -242,6 +251,7 @@ def _detect_peers(info: dict, ticker: str) -> list[str]:
 # AGENT 2: PRICE & VOLUME
 # ---------------------------------------------------------------------------
 
+@traceable(name="agent-price-volume")
 def agent_price_volume(state: dict) -> dict:
     """Current price, 52-week range, volume analysis."""
     ticker = state["ticker"]
@@ -330,6 +340,7 @@ def agent_price_volume(state: dict) -> dict:
 # AGENT 3: FUNDAMENTALS
 # ---------------------------------------------------------------------------
 
+@traceable(name="agent-fundamentals")
 def agent_fundamentals(state: dict) -> dict:
     """Valuation, profitability, growth, balance sheet."""
     ticker = state["ticker"]
@@ -442,6 +453,7 @@ def agent_fundamentals(state: dict) -> dict:
 # AGENT 4: TECHNICAL ANALYSIS
 # ---------------------------------------------------------------------------
 
+@traceable(name="agent-technical")
 def agent_technical(state: dict) -> dict:
     """SMA, RSI, MACD, Bollinger Bands, trend analysis."""
     ticker = state["ticker"]
@@ -544,6 +556,7 @@ def agent_technical(state: dict) -> dict:
 # AGENT 5: RISK ASSESSMENT
 # ---------------------------------------------------------------------------
 
+@traceable(name="agent-risk")
 def agent_risk(state: dict) -> dict:
     """Beta, volatility, max drawdown, Sharpe ratio."""
     ticker = state["ticker"]
@@ -642,6 +655,7 @@ def agent_risk(state: dict) -> dict:
 # AGENT 6: PEER COMPARISON
 # ---------------------------------------------------------------------------
 
+@traceable(name="agent-peer-comparison")
 def agent_peer_comparison(state: dict) -> dict:
     """Compare against peer tickers on key metrics."""
     ticker = state["ticker"]
@@ -753,6 +767,7 @@ def _ticker_to_cik(ticker: str) -> str | None:
     return None
 
 
+@traceable(name="agent-sec-filings")
 def agent_sec_filings(state: dict, sec_email: str | None = None) -> dict:
     """
     SEC EDGAR filings agent — pulls 10-K, 10-Q, 8-K filing metadata
@@ -1004,6 +1019,7 @@ def _fetch_price_target(ticker: str, api_key: str) -> dict:
     return data
 
 
+@traceable(name="agent-finnhub-sentiment")
 def agent_finnhub_sentiment(state: dict, finnhub_key: str | None = None) -> dict:
     """
     Finnhub sentiment agent — pulls analyst recommendations, insider
@@ -1233,6 +1249,7 @@ def _eodhd_get(endpoint: str, params: dict, api_key: str) -> Any:
     return resp.json()
 
 
+@traceable(name="agent-eodhd-sentiment")
 def agent_eodhd_sentiment(state: dict, eodhd_key: str | None = None) -> dict:
     """
     EODHD sentiment agent — pulls daily sentiment scores and news.
@@ -1564,6 +1581,7 @@ Write your analysis with these sections:
 Use the actual numbers from the data. Be specific, not generic."""
 
 
+@traceable(name="researcher-openai-api-call")
 def _call_openai(context: str, api_key: str, model: str) -> str:
     """Call OpenAI API for synthesis."""
     resp = requests.post(
@@ -1585,6 +1603,7 @@ def _call_openai(context: str, api_key: str, model: str) -> str:
     return data["choices"][0]["message"]["content"]
 
 
+@traceable(name="researcher-anthropic-api-call")
 def _call_anthropic(context: str, api_key: str, model: str) -> str:
     """Call Anthropic API for synthesis."""
     resp = requests.post(
@@ -1613,6 +1632,7 @@ def _call_anthropic(context: str, api_key: str, model: str) -> str:
 DEFAULT_MODELS = DEFAULT_LLM_MODELS
 
 
+@traceable(name="agent-llm-synthesis")
 def agent_llm_synthesis(state: dict, llm_provider: str | None = None,
                         llm_key: str | None = None, llm_model: str | None = None) -> dict:
     """
@@ -1695,6 +1715,7 @@ def agent_llm_synthesis(state: dict, llm_provider: str | None = None,
 # AGENT 11: REPORT ASSEMBLY
 # ---------------------------------------------------------------------------
 
+@traceable(name="agent-report-assembly")
 def agent_report_assembly(state: dict) -> str:
     """Synthesize all agent outputs into a structured research report."""
     print(f"  [11/11] Assembling report...", end=" ", flush=True)
@@ -2116,6 +2137,7 @@ def agent_report_assembly(state: dict) -> str:
 # PIPELINE ORCHESTRATOR
 # ---------------------------------------------------------------------------
 
+@traceable(name="run-pipeline")
 def run_pipeline(ticker: str, peers: list[str] | None = None,
                  llm_provider: str | None = None, llm_key: str | None = None,
                  llm_model: str | None = None,

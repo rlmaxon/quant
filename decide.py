@@ -25,6 +25,14 @@ import requests
 from config import DEFAULT_LLM_MODELS
 from shared import log_agent
 
+try:
+    from langsmith import traceable
+except ImportError:
+    def traceable(name=None, **kwargs):
+        def decorator(fn):
+            return fn
+        return decorator
+
 _DEFAULT_MODEL = DEFAULT_LLM_MODELS["anthropic"]
 _MAX_TOKENS = 1200
 _TEMPERATURE = 0.2
@@ -177,6 +185,7 @@ def _build_context(state: dict) -> str:
 # Anthropic API call
 # ---------------------------------------------------------------------------
 
+@traceable(name="decide-anthropic-api-call")
 def _call_anthropic(prompt: str, api_key: str, model: str) -> str:
     resp = requests.post(
         "https://api.anthropic.com/v1/messages",
@@ -258,6 +267,7 @@ def _parse_response(text: str) -> dict:
 # Pipeline integration
 # ---------------------------------------------------------------------------
 
+@traceable(name="make-decision")
 def make_decision(
     state: dict,
     api_key: str | None = None,
